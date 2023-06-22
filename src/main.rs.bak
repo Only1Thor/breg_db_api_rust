@@ -1,0 +1,50 @@
+use mongodb::{Client, options::ClientOptions};
+use warp::{Filter, Reply};
+
+#[tokio::main]
+async fn main() {
+    // Set up MongoDB client
+    let client_options = ClientOptions::parse("mongodb://user:pass@mongodb.local").await.unwrap();
+    let client = Client::with_options(client_options).unwrap();
+    let db = client.database("mydb");
+
+    // Define the route for retrieving the JSON object
+    let object_route = warp::path!("org" / String)
+        .and(warp::get())
+        .and(warp::any().map(move || db.clone()))
+        .and_then(get_object);
+
+    // Start the Warp server
+    warp::serve(object_route).run(([127, 0, 0, 1], 8080)).await;
+}
+
+async fn get_object(org_id: String, db: mongodb::Database) -> Result<impl Reply, warp::Rejection> {
+    // Check if the object exists in the database
+    let collection = db.collection("objects");
+    let filter = doc! {"_id": org_id.clone()};
+    let result = collection.find_one(filter, None).await;
+
+    match result {
+        Ok(Some(document)) => {
+            // Object found in the database, return it as JSON
+            Ok(warp::reply::json(&document))
+        },
+        Ok(None) => {
+            // Object not found in the database, search the external API
+            let api_url = format!("https://data.brreg.no/enhetsregisteret/api/enheter/{}/roller", org_id);
+            let response = reqwest::get(&api_url).await.unwrap();
+            let json = response.json::<serde_json::Value>().await.unwrap();
+
+            // Insert the retrieved object into the database
+            collection.insert_one(json.clone(), None).await.unwrap();
+
+            // Return the retrieved object as JSON
+            Ok(warp::reply::json(&json))
+        },
+        Err(_) => {
+            // Error occurred while querying the database
+            Err(warp::reject::server_error())
+        }
+    }
+}
+
