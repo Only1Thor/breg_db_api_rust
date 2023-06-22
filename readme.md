@@ -1,4 +1,13 @@
 # Breg organisasjonsroller
+## ToDo
+- docker mongodb. 
+- fungerende kode (mvp)
+  - tilby api
+  - hente fra breg
+  - lagre i db
+  - hente organisasjoner personer tilhører. 
+
+## Bakrund
 tanken med denne er å lage en liten app som henter ned org info fra breg sine åpne apier, og organisere det for oppslag via api. 
 og å lære litt rust. 
 
